@@ -3,7 +3,8 @@ use crate::error::Error;
 #[derive(PartialEq, Debug)]
 pub struct UrlParser {
     pub scheme: String,
-    pub host: String,
+    pub hostname: String,
+    pub port: usize,
     pub path: String
 }
 
@@ -15,21 +16,41 @@ impl UrlParser {
             format!("http://{}", url)
         };
 
+        let mut port = 80;
+
         let mut parts = addr.split("://");
 
         let scheme = match parts.next() {
-            Some(v) => v.to_string(),
-            None => return Err(Error::UrlParsingError),
+            Some(v) => {
+                match v {
+                    "https" => { port = 443; },
+                    _ => {}
+                }
+
+                v.to_string()
+            },
+            None => return Err(Error::UrlParsingError("Scheme".to_owned())),
         };
 
         parts = match parts.next() {
             Some(v) => v.split("/"),
-            None => return Err(Error::UrlParsingError),
+            None => return Err(Error::UrlParsingError("host and path".to_owned())),
         };
 
-        let host = match parts.next() {
-            Some(v) => v.to_owned(),
-            None => return Err(Error::UrlParsingError),
+        let hostname = match parts.next() {
+            Some(v) => {
+                let mut host_name = v.to_string();
+
+                if v.contains(":") {
+                    let mut payload = v.split(":");
+                    
+                    host_name = payload.next().unwrap().to_string();
+                    port = payload.next().unwrap().parse().unwrap_or(80);
+                }
+                
+                host_name
+            },
+            None => return Err(Error::UrlParsingError("hostname".to_owned())),
         };
 
         let mut path = String::new();
@@ -49,8 +70,9 @@ impl UrlParser {
         }
 
         Ok(UrlParser {
-            host,
+            hostname,
             path,
+            port,
             scheme
         })
     }
@@ -67,7 +89,8 @@ mod test {
 
         let expected = UrlParser {
             scheme: "https".to_owned(),
-            host: "example.com".to_owned(),
+            hostname: "example.com".to_owned(),
+            port: 443,
             path: "/".to_owned()
         };
 
@@ -76,13 +99,16 @@ mod test {
 
     #[test]
     fn test2() {
-        let url = "example.com/some/path";
+        let url = "http://example.com:3000/some/path";
 
         let parsed_url = UrlParser::from(url).unwrap();
 
+        println!("--------------> {:?}", parsed_url);
+
         let expected = UrlParser {
             scheme: "http".to_owned(),
-            host: "example.com".to_owned(),
+            hostname: "example.com".to_owned(),
+            port: 3000,
             path: "/some/path".to_owned()
         };
 
