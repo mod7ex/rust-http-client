@@ -1,14 +1,14 @@
 mod error;
 mod client;
 
-use client::connection::Connection;
+use client::{ connection::Connection, methods::Method };
 use error::Error;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<Error>>  {
-    let mut connection = Connection::new("http://site.azbuka-novostroek.com:8000").await?;
+async fn main() -> Result<(), Error>  {
+    let mut connection = Connection::new("http://site.azbuka-novostroek.com").await?;
 
-    let response = connection.get_request().await?;
+    let response = connection.request(Method::GET, None).await?;
 
     /* println!("{:#?}", response); */
 

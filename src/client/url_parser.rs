@@ -78,6 +78,7 @@ impl UrlParser {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::UrlParser;
 

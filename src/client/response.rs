@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
+use tokio::net::TcpStream;
 use tokio::io::AsyncReadExt;
 
 use crate::error::Error;
-
-use super::connection::Connection;
 
 #[derive(Debug)]
 pub struct Response {
@@ -16,7 +15,7 @@ pub struct Response {
 }
 
 impl Response {
-    pub async fn new(connection: &mut Connection) -> Result<Self, Error> {
+    pub async fn new(stream: &mut TcpStream) -> Result<Self, Error> {
         let mut buffer = Vec::new();
         let mut headers = HashMap::new();
         let mut body: Option<Vec<u8>> = None;
@@ -24,7 +23,7 @@ impl Response {
         let mut is_header_section = false;
 
         loop {
-            match connection.stream.read_u8().await {
+            match stream.read_u8().await {
                 Ok(bytes) => {
                     buffer.push(bytes);
 
