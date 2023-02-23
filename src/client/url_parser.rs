@@ -5,11 +5,14 @@ pub struct UrlParser {
     pub scheme: String,
     pub hostname: String,
     pub port: usize,
-    pub path: String
+    pub path: String,
+    pub file: Option<String>
 }
 
 impl UrlParser {
     pub fn from(url: &str) -> Result<UrlParser, Error> {
+        let mut file = None;
+
         let addr = if url.starts_with("http") || url.starts_with("https") {
             url.to_owned()
         } else {
@@ -58,7 +61,11 @@ impl UrlParser {
         loop {
             match parts.next() {
                 Some(v) => {
-                    path.push_str(format!("/{}", v).as_str())
+                    path.push_str(format!("/{}", v).as_str());
+
+                    if v.contains('.') {
+                        file = Some(String::from(v));
+                    }
                 },
                 None => {
                     if path.is_empty() {
@@ -73,7 +80,8 @@ impl UrlParser {
             hostname,
             path,
             port,
-            scheme
+            scheme,
+            file
         })
     }
 }
@@ -92,7 +100,8 @@ mod test {
             scheme: "https".to_owned(),
             hostname: "example.com".to_owned(),
             port: 443,
-            path: "/".to_owned()
+            path: "/".to_owned(),
+            file: None
         };
 
         assert_eq!(parsed_url, expected);
@@ -107,10 +116,30 @@ mod test {
         println!("--------------> {:?}", parsed_url);
 
         let expected = UrlParser {
-            scheme: "http".to_owned(),
-            hostname: "example.com".to_owned(),
             port: 3000,
-            path: "/some/path".to_owned()
+            file: None,
+            scheme: "http".to_owned(),
+            path: "/some/path".to_owned(),
+            hostname: "example.com".to_owned(),
+        };
+
+        assert_eq!(parsed_url, expected);
+    }
+
+    #[test]
+    fn test3() {
+        let url = "http://example.com:3000/some/path/some-file.ext";
+
+        let parsed_url = UrlParser::from(url).unwrap();
+
+        println!("--------------> {:?}", parsed_url);
+
+        let expected = UrlParser {
+            port: 3000,
+            scheme: "http".to_owned(),
+            path: "/some/path/some-file.ext".to_owned(),
+            hostname: "example.com".to_owned(),
+            file: Some(String::from("some-file.ext"))
         };
 
         assert_eq!(parsed_url, expected);
