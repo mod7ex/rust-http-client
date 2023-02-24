@@ -1,6 +1,6 @@
-use tokio::{net::TcpStream, io::{AsyncWriteExt}, fs::OpenOptions};
+use tokio::{self, net::TcpStream, io::{AsyncWriteExt, AsyncSeekExt}, fs::OpenOptions, sync::Semaphore};
 
-use std::{collections::HashMap, path::PathBuf, time::{SystemTime}, sync::mpsc::channel};
+use std::{ path::PathBuf, time::{SystemTime}, sync::{mpsc::channel, Arc}};
 
 use super::{
     url_parser::UrlParser, 
@@ -9,8 +9,11 @@ use super::{
     methods::Method
 };
 
+static SEM: Semaphore = Semaphore::const_new(0);
+
 use crate::error::Error;
 
+#[derive(Clone)]
 pub struct Connection {
     pub parsed_url: UrlParser,
 }
@@ -22,7 +25,7 @@ impl Connection {
         Ok(Connection { parsed_url })
     }
 
-    pub async fn request(&mut self,request: Request) -> Result<Response, Error> {
+    pub async fn request(&self,request: Request) -> Result<Response, Error> {
         let mut stream = TcpStream::connect(
             format!("{}:{}", &self.parsed_url.hostname, &self.parsed_url.port)
         ).await?;
@@ -45,7 +48,7 @@ impl Connection {
         Ok(Response::new(&mut stream).await?)
     } 
 
-    pub async fn download(&mut self, path: PathBuf) -> Result<(), Error> {
+    pub async fn download(&self, path: PathBuf) -> Result<(), Error> {
         let head_request = Request::new().set_method(Method::HEAD);
         let head_request_response = self.request(head_request).await?;
         println!("{:#?}", head_request_response.headers);
@@ -81,18 +84,61 @@ impl Connection {
             None => 0
         };
 
-        let connection_count = 5;
+        SEM.add_permits(5);
+
         let each_segment = 2_000_000;
 
         if content_length != 0 && content_length > each_segment {
-            /* let (tx, rx) = channel(); */
+            let (tx, rx) = channel();
+
+            let mut left_steps = content_length / each_segment;
+
+            let mut range = 0..each_segment;
+
+            let arc_self = Arc::new(self.clone());
+
+            tokio::spawn(async move {
+                while let Ok(permit) = SEM.acquire().await {
+                    let _self = arc_self.clone();
+                    let current_range = range.clone();
+                    let _tx = tx.clone();
+
+                    tokio::spawn(async move {
+                        println!("spawn");
+                        let _permit = permit;
+                        let request = Request::new().set_range(current_range.clone());
+                        let mut response = _self.request(request).await.unwrap();
+
+                        response.range = Some(current_range);
+
+                        _tx.send(response).unwrap();
+                    });
+
+                    range = if range.end + each_segment > content_length {
+                        range.end + 1..content_length
+                    } else {
+                        range.end + 1..range.end + each_segment
+                    };
+
+                    if left_steps == 0 {
+                        break;
+                    }
+                    left_steps -= 1;
+                }
+            });
+
+            while let Ok(response) = rx.recv() {
+                println!("");
+                file.seek(std::io::SeekFrom::Start(response.range.unwrap().start as u64)).await?;
+                file.write_all(response.body.unwrap().as_slice()).await?;
+            }
+        } else {
+            let get_request = Request::new();
+
+            let get_request_response = self.request(get_request).await?;
+    
+            file.write_all(get_request_response.body.unwrap().as_slice()).await?;
         }
-
-        let get_request = Request::new();
-
-        let get_request_response = self.request(get_request).await?;
-
-        file.write_all(get_request_response.body.unwrap().as_slice()).await?;
 
         println!("File downloaded: {}", file_path.to_str().unwrap());
 

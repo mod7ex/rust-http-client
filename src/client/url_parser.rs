@@ -1,6 +1,6 @@
 use crate::error::Error;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct UrlParser {
     pub scheme: String,
     pub hostname: String,

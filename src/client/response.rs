@@ -1,7 +1,7 @@
 use std::collections::HashMap;
+use std::ops::Range;
 
-use tokio::net::TcpStream;
-use tokio::io::AsyncReadExt;
+use tokio::{net::TcpStream, io::AsyncReadExt};
 
 use crate::error::Error;
 
@@ -11,7 +11,8 @@ pub struct Response {
     pub status_code: usize,
     pub status_name: String,
     pub headers: HashMap<String, String>,
-    pub body: Option<Vec<u8>>
+    pub body: Option<Vec<u8>>,
+    pub range: Option<Range<usize>>
 }
 
 impl Response {
@@ -86,6 +87,7 @@ impl Response {
             status_name,
             headers,
             body,
+            range: None
         })
     }
 }
