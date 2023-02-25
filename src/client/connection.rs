@@ -51,7 +51,6 @@ impl Connection {
     pub async fn download(&self, path: PathBuf) -> Result<(), Error> {
         let head_request = Request::new().set_method(Method::HEAD);
         let head_request_response = self.request(head_request).await?;
-        println!("{:#?}", head_request_response.headers);
 
         let mut file_path = path;
 
@@ -68,7 +67,7 @@ impl Connection {
                     // generate file name
                     let now = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                         Ok(n) => n.as_secs(),
-                        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+                        Err(_) => 0,
                     };
                     file_name.push_str(&format!("Download-{}", now));
                 }
@@ -79,6 +78,7 @@ impl Connection {
 
         let mut file = OpenOptions::new().create(true).read(true).write(true).open(&file_path).await?;
 
+        // in Bytes 
         let content_length = match head_request_response.headers.get("Content-Length") {
             Some(v) => v.trim().parse().unwrap(),
             None => 0
@@ -86,8 +86,8 @@ impl Connection {
 
         SEM.add_permits(5);
 
-        let each_segment = 2_000_000;
-
+        let each_segment = 500_000; // 5KB
+        // check if server supports range request <Accept-Ranges: bytes> -- https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests
         if content_length != 0 && content_length > each_segment {
             let (tx, rx) = channel();
 
@@ -123,12 +123,13 @@ impl Connection {
                     if left_steps == 0 {
                         break;
                     }
+                    
                     left_steps -= 1;
                 }
             });
 
             while let Ok(response) = rx.recv() {
-                println!("");
+                println!("received");
                 file.seek(std::io::SeekFrom::Start(response.range.unwrap().start as u64)).await?;
                 file.write_all(response.body.unwrap().as_slice()).await?;
             }
