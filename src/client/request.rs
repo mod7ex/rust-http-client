@@ -42,8 +42,12 @@ impl Request {
         &self.headers
     }
 
-    pub fn get_range(&self) -> &Option<Range<usize>> {
-        &self.range
+    pub fn get_range(&self) -> Option<&Range<usize>> {
+        if let Some(b) = &self.range {
+            Some(b)
+        } else {
+            None
+        }
     }
 
     pub fn get_method(&self) -> &Method {
@@ -54,8 +58,12 @@ impl Request {
         &self.query
     }
 
-    pub fn get_body(&self) -> &Option<Vec<u8>> {
-        &self.body
+    pub fn get_body(&self) -> Option<&Vec<u8>> {
+        if let Some(b) = &self.body {
+            Some(b)
+        } else {
+            None
+        }
     }
 
     pub fn get_content_length(&self) -> usize {
@@ -115,8 +123,23 @@ impl Request {
     pub fn multipart(mut self) -> Self {
         self.headers.insert(
             "Content-Type".to_string(),
-            format!("multipart/form-data; boundary=\"{}\"", BOUNDARY)
+            format!("multipart/form-data; boundary={}", BOUNDARY)
         );
+
+        self
+    }
+
+    fn start_body_part(mut self) -> Self {
+        let form_part_start = format!("--{}\r\n", BOUNDARY);
+
+        let mut b = form_part_start.as_bytes();
+
+        if let Some(mut body) = self.body {
+            body.write_all(&b).unwrap();
+            self.body = Some(body.to_owned());
+        } else {
+            self.body = Some(b.to_owned());
+        }
 
         self
     }
@@ -136,20 +159,45 @@ impl Request {
      */
 
     pub fn add_data<T: Display>(mut self, key: &str, value: T) -> Self {
+        self = self.start_body_part();
+
+        let mut body = self.body.unwrap(); // body 100% exists 
+
         let mut item = String::new();
-
         item.push_str(&format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n", key));
+        item.push_str(&format!("{}\r\n", value.to_string())); 
 
-        item.push_str(&format!("{}\r\n", value.to_string()));
-        item.push_str(&format!("--{}\r\n", BOUNDARY)); // at the end
+        body.write_all(item.as_bytes()).unwrap();
 
-        if let Some(mut body) = self.body {
-            body.write_all(item.as_bytes()).unwrap();
-            self.body = Some(body);
-        }else {
-            item.insert_str(0, &format!("--{}\r\n", BOUNDARY)); // at first
-            self.body = Some(item.as_bytes().to_vec());
-        }
+        self.body = Some(body);
+
+        self
+    }
+
+    pub fn add_file(mut self, key: &str, filename: &str, file: Vec<u8>) -> Self {
+        self = self.start_body_part();
+
+        let mut body = self.body.unwrap(); // body 100% exists 
+
+        let mut item = format!("Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n\r\n", key, filename);
+        body.write_all(item.as_bytes()).unwrap();
+
+        body.write_all(file.as_slice()).unwrap();
+        body.write_all("\r\n".as_bytes());
+
+        self.body = Some(body);
+
+        self
+    }
+
+    pub fn close_multipart_form_data(mut self) -> Self {
+        let mut body = self.body.unwrap(); // expects body to be filled
+
+        let form_part_end = format!("--{}--", BOUNDARY);
+
+        body.write_all(form_part_end.as_bytes()).unwrap();
+
+        self.body = Some(body);
 
         self
     }

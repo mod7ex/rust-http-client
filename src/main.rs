@@ -6,6 +6,7 @@ mod client;
 use std::path::PathBuf;
 use client::{connection::Connection, request::Request, methods::Method};
 use error::Error;
+use tokio::{fs::OpenOptions, io::AsyncReadExt};
 
 /*
 
@@ -54,20 +55,21 @@ async fn main() -> Result<(), Error>  {
         let request = Request::new()
             .add_query("name", "Mourad")
             .add_query("age", "25");
+
         println!("{:#?}", request);
-        /* connection.request(request).await?; */
+        let response = connection.request(request).await?;
+        println!("{:#?}", response);
     }
 
     Ok(())
 }
-
 */
 
 /*
 
 #[tokio::main]
 async fn main() -> Result<(), Error>  {
-    if let Ok(connection) = Connection::new("http://127.0.0.1:3000").await {
+    if let Ok(connection) = Connection::new("http://127.0.0.1:3000/urlencoded").await {
         let request = Request::new()
             .set_method(Method::POST)
             .form_data()
@@ -75,27 +77,44 @@ async fn main() -> Result<(), Error>  {
             .add_form_data("age", "25");
 
         println!("{:#?}", request);
-        /* connection.request(request).await?; */
+        let b = request.get_body().unwrap().to_owned();
+        println!("{}", String::from_utf8(b).unwrap());
+
+        let response = connection.request(request).await?;
+        println!("{:#?}", response);
     }
 
     Ok(())
 }
-
 */
+
+/**/
 
 #[tokio::main]
 async fn main() -> Result<(), Error>  {
-    if let Ok(connection) = Connection::new("http://127.0.0.1:3000").await {
+    if let Ok(connection) = Connection::new("http://127.0.0.1:3000/multipart-form-data").await {
+        let file_path: PathBuf = "/home/mourad/Desktop/rust/http-client/file.txt".into();
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(file_path)
+            .await?;
+        let mut buffer = vec![];
+        file.read_to_end(&mut buffer).await?;
+        
         let request = Request::new()
+            .set_method(Method::POST)
             .multipart()
             .add_data("name", "Mourad")
-            .add_data("age", "25");
+            .add_data("age", "25")
+            .add_file("file", "file.txt", buffer)
+            .close_multipart_form_data();
 
         println!("{:#?}", request);
-        let  mut b = request.get_body().unwrap().as_mut();
-        println!("----------------> body: {}", String::from_utf8(b.to_owned()).unwrap());
+        let b = request.get_body().unwrap().to_owned();
+        println!("{}", String::from_utf8(b).unwrap());
 
-        /* connection.request(request).await?; */
+        let response = connection.request(request).await?;
+        println!("{:#?}", response);
     }
 
     Ok(())
