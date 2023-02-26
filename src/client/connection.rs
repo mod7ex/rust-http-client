@@ -30,19 +30,37 @@ impl Connection {
             format!("{}:{}", &self.parsed_url.hostname, &self.parsed_url.port)
         ).await?;
 
-        let _ = stream.write_all(format!("{} {} HTTP/1.1\r\n", request.get_method(), &self.parsed_url.path).as_bytes()).await?;
-        let _ = stream.write_all(format!("HOST: {}\r\n", &self.parsed_url.hostname).as_bytes()).await?;
+        let path = if request.get_query().is_empty() {
+            self.parsed_url.path.to_owned()
+        } else {
+            format!("{}?{}", self.parsed_url.path, request.get_query())
+        };
+
+        let _ = stream.write_all(
+            format!("{} {} HTTP/1.1\r\n", request.get_method(), path).as_bytes()
+        ).await?;
+        let _ = stream.write_all(
+            format!("HOST: {}\r\n", &self.parsed_url.hostname).as_bytes()
+        ).await?;
         for header in request.get_headers() {
             let _ = stream.write_all(
                 format!("{}: {}\r\n", header.0, header.1).as_bytes()
             ).await?;
         }
+        let _ = stream.write_all(
+            format!("Content-Length: {}\r\n", request.get_content_length()).as_bytes()
+        ).await?;
         if let Some(range) = request.get_range() {
             let _ = stream.write_all(
                 format!("Range: bytes={}-{}\r\n", range.start, range.end).as_bytes()
             ).await?;
         }
         let _ = stream.write_all(b"Connection: Close\r\n").await?;
+
+        if let Some(body_content) = request.get_body() {
+            let _ = stream.write_all(body_content.as_slice()).await?;
+        }
+
         let _ = stream.write_all(b"\r\n\r\n").await?;
 
         Ok(Response::new(&mut stream).await?)

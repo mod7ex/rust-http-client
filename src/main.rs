@@ -1,8 +1,10 @@
+#![allow(unused)]
+
 mod error;
 mod client;
 
 use std::path::PathBuf;
-use client::{connection::Connection};
+use client::{connection::Connection, request::Request, methods::Method};
 use error::Error;
 
 /*
@@ -29,6 +31,8 @@ async fn main() -> Result<(), Error>  {
 
 */
 
+/*
+
 #[tokio::main]
 async fn main() -> Result<(), Error>  {
     let mut connection = Connection::new("http://127.0.0.1:3000/file").await?;
@@ -36,6 +40,63 @@ async fn main() -> Result<(), Error>  {
     connection.download(PathBuf::from("/home/mourad/Desktop")).await?;
 
     println!("{:#?}", connection.parsed_url);
+
+    Ok(())
+}
+
+*/
+
+/*
+
+#[tokio::main]
+async fn main() -> Result<(), Error>  {
+    if let Ok(connection) = Connection::new("http://127.0.0.1:3000").await {
+        let request = Request::new()
+            .add_query("name", "Mourad")
+            .add_query("age", "25");
+        println!("{:#?}", request);
+        /* connection.request(request).await?; */
+    }
+
+    Ok(())
+}
+
+*/
+
+/*
+
+#[tokio::main]
+async fn main() -> Result<(), Error>  {
+    if let Ok(connection) = Connection::new("http://127.0.0.1:3000").await {
+        let request = Request::new()
+            .set_method(Method::POST)
+            .form_data()
+            .add_form_data("name", "Mourad")
+            .add_form_data("age", "25");
+
+        println!("{:#?}", request);
+        /* connection.request(request).await?; */
+    }
+
+    Ok(())
+}
+
+*/
+
+#[tokio::main]
+async fn main() -> Result<(), Error>  {
+    if let Ok(connection) = Connection::new("http://127.0.0.1:3000").await {
+        let request = Request::new()
+            .multipart()
+            .add_data("name", "Mourad")
+            .add_data("age", "25");
+
+        println!("{:#?}", request);
+        let  mut b = request.get_body().unwrap().as_mut();
+        println!("----------------> body: {}", String::from_utf8(b.to_owned()).unwrap());
+
+        /* connection.request(request).await?; */
+    }
 
     Ok(())
 }

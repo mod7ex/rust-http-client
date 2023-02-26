@@ -1,5 +1,6 @@
 use std::fmt::{ Display, Formatter, Result };
 
+#[derive(Debug)]
 pub enum Method {
     GET,
     PUT,
